@@ -94,13 +94,11 @@ if  ($Disconnect) {
 # $O365Credentials = New-Object System.Management.Automation.PSCredential -ArgumentList $UserName, $SecPassword
 # (May also be possible to encode the SecurePassword (using convertfrom-securestring) and just embed that, which would be better) [untested]
 
-write-host
-write-host -foreground magenta "Please provide the Office 365 password in the pop-up box..."
-write-host
 try {
 	# Making this global in scope so the creds can be used in other commands later if needed.
-	$Global:O365Credentials = Get-Credential  $O365UserName
-	# Note, if ever needed: $PlainPassword = $O365Credentials.GetNetworkCredential().Password 
+	$Global:O365Credentials = $Host.ui.PromptForCredential("Enter Office 365 Credentials", "Please enter the Office 365 Administrator Credentials.", "", "")
+	if ($O365Credentials.GetNetworkCredential().Password -eq $null) {throw: Password of Zero Length}#take us to exception as cancelling a promptforcredential doesn't throw an exception by default
+    # Note, if ever needed: $PlainPassword = $O365Credentials.GetNetworkCredential().Password 
 } catch {
 	write-host -foreground red 'ERROR!!! You MUST enter a Username and Password!' 
 	write-host
@@ -110,12 +108,11 @@ try {
 }
 
 # This is for Office 365 / Exchange Online, for EOP see below.
-write "Please wait, connecting to Office 365"
-write-host 
+Write-Progress -Activity "Please wait, connecting to Office 365"
 # Use $global:varname scope so variable perists outside of this script so the session can be ended later. Most people forget this in their O365 scripts!
 
 # For Office 365 use:
-$Global:O365Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell/ -Credential $O365Credentials -Authentication Basic -AllowRedirection
+$Global:O365Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell/ -Credential $O365Credentials -Authentication Basic -AllowRedirection -WarningAction silentlyContinue
 # Another URI could be: https://outlook.office365.com/powershell-liveid/
 
 # For EOP use:
@@ -133,7 +130,7 @@ if ($O365Session.State -eq "Opened") {
 	exit  #exit script
 }
 
-Import-PSSession $O365Session -AllowClobber
+Import-PSSession $O365Session -AllowClobber -WarningAction silentlyContinue
 write-host
 # if it worked then the following should work:
 #Get-AcceptedDomain
