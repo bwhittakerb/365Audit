@@ -1,5 +1,4 @@
-﻿
-<#
+﻿<#
 .Synopsis
 Connects to Office 365 and Azure AD and retrieves list of user objects.
 
