@@ -21,67 +21,66 @@ Default O365UserName can be specified in the script PARAM section.
 
 #>
 [CmdletBinding()]
-#Accept input parameters 
-param( 
-    [Parameter(Mandatory=$true, ValueFromPipeline=$true)] 
-    [string] $Office365Username, 
-    [Parameter(Mandatory=$true, ValueFromPipeline=$true)] 
+#Accept input parameters
+param(
+    [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+    [string] $Office365Username,
+    [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
     [string] $Office365Password,
     [Parameter(Mandatory=$false)]
 	[switch]$EZ
 
-) 
-#Main 
+)
+#Main
 Function Main {
 
- 
-    #Remove all existing Powershell sessions 
-    Get-PSSession | Remove-PSSession 
+    #Remove all existing Powershell sessions
+    Get-PSSession | Remove-PSSession
 
     try{
         #Call function to connect to MSOL service
         Write-Progress -Activity "Connecting to Office 365..."
         ConnectTo-365Tenancy -Office365AdminUsername $Office365Username -Office365AdminPassword $Office365Password
 
-        #Call ConnectTo-ExchangeOnline function with correct credentials 
+        #Call Open-ExchangeOnlineSession function with correct credentials
         Write-Progress -Activity "Connecting to Exchange Online..."
-        ConnectTo-ExchangeOnline -Office365AdminUsername $Office365Username -Office365AdminPassword $Office365Password
-       
+        Open-ExchangeOnlineSession -Office365AdminUsername $Office365Username -Office365AdminPassword $Office365Password
+
         #gather all mailboxes from Office 365
         Write-Progress -Activity "Receiving User Lists..." -PercentComplete 0
         $objUsers = get-mailbox -ResultSize Unlimited
-    
+
         #gather all users in 365 tenancy
         Write-Progress -Activity "Receiving User Lists..." -PercentComplete 50 -CurrentOperation "1 of 2 completed."
         $objMsolUsers = Get-MsolUser -All
         Write-Progress -Activity "Receiving User Lists..." -PercentComplete 100 -Completed -Status "2 of 2 completed."
 
         #Grab default domain name and save in a variable
-        $default365Domain = (Get-MsolDomain | ?{$_.isDefault -eq $true}).Name
+        $default365Domain = (Get-MsolDomain | Where-Object{$_.isDefault -eq $true}).Name
 
         #call Knitting Function if EZ switch argument is pulled
-        if($EZ -eq $false){ Knit-UserData}
+        if($EZ -eq $false){ Merge-UserData}
         else {
          Write-Progress -Activity "Writing List to file..." -id 1
-         Knit-UserData | Export-Csv ($default365Domain+'_userlist.csv') -NoTypeInformation
+         Merge-UserData | Export-Csv ($default365Domain+'_userlist.csv') -NoTypeInformation
          }
 
     }
-    
+
     Finally {
-        #Clean up session 
+        #Clean up session
         Get-PSSession | Remove-PSSession
     }
-} 
+}
 
-function Knit-UserData {
-    #Iterate through all users     
-    ForEach ($objUser in $objUsers) {   
+function Merge-UserData {
+    #Iterate through all users
+    ForEach ($objUser in $objUsers) {
         $indexofProgress = ($objUsers.IndexOf($objUser) / $objUsers.Length) * 100
         $indexofProgress = [math]::Round($indexOfProgress,2)
 
-        $365Account = $objMsolUsers | ?{$_.UserPrincipalName -eq $objUser.UserPrincipalName}
-        
+        $365Account = $objMsolUsers | Where-Object{$_.UserPrincipalName -eq $objUser.UserPrincipalName}
+
         New-Object -TypeName PSObject -Property @{
             Alias = $objUser.Alias
             DisplayName = $objUser.DisplayName
@@ -92,92 +91,96 @@ function Knit-UserData {
             }
         Write-Progress -Activity "Fetching and knitting the user data together…" `
             -PercentComplete $indexofProgress -CurrentOperation "$indexOfProgress% through the userlist" -Status "Hang Tight"
-         
+
     }
 }
 
 
-############################################################################### 
-# 
-# Function ConnectTo-ExchangeOnline 
-# 
-# PURPOSE 
-#    Connects to Exchange Online Remote PowerShell using the tenant credentials 
-# 
-# INPUT 
-#    Tenant Admin username and password. 
-# 
-# RETURN 
-#    None. 
-# 
-############################################################################### 
-function ConnectTo-ExchangeOnline 
-{    
-    Param(  
-        [Parameter( 
-        Mandatory=$true, 
-        Position=0)] 
-        [String]$Office365AdminUsername, 
-        [Parameter( 
-        Mandatory=$true, 
-        Position=1)] 
-        [String]$Office365AdminPassword 
- 
-    ) 
-         
-    #Encrypt password for transmission to Office365 
-    $SecureOffice365Password = ConvertTo-SecureString -AsPlainText $Office365AdminPassword -Force     
-     
-    #Build credentials object 
-    $Office365Credentials  = New-Object System.Management.Automation.PSCredential $Office365AdminUsername, $SecureOffice365Password 
-     
-    #Create remote Powershell session 
-    $Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $Office365credentials -Authentication Basic –AllowRedirection         
- 
-    #Import the session 
-    Import-PSSession $Session -AllowClobber | Out-Null 
-} 
+###############################################################################
+#
+# Function Open-ExchangeOnlineSession
+#
+# PURPOSE
+#    Connects to Exchange Online Remote PowerShell using the tenant credentials
+#
+# INPUT
+#    Tenant Admin username and password.
+#
+# RETURN
+#    None.
+#
+###############################################################################
+function Open-ExchangeOnlineSession
+{
+    Param(
+        [Parameter(
+        Mandatory=$true,
+        Position=0)]
+        [String]$Office365AdminUsername,
+        [Parameter(
+        Mandatory=$true,
+        Position=1)]
+        [String]$Office365AdminPassword
 
-############################################################################### 
-# 
-# Function ConnectTo-365Tenancy 
-# 
-# PURPOSE 
-#    Connects to Microsoft Online Remote PowerShell using the tenant credentials 
-# 
-# INPUT 
-#    Tenant Admin username and password. 
-# 
-# RETURN 
-#    None. 
+    )
+
+    #Encrypt password for transmission to Office365
+    $SecureOffice365Password = ConvertTo-SecureString -AsPlainText $Office365AdminPassword -Force
+
+    #Build credentials object
+    $Office365Credentials  = New-Object System.Management.Automation.PSCredential $Office365AdminUsername, $SecureOffice365Password
+
+    #Create remote Powershell session
+    $Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $Office365credentials -Authentication Basic –AllowRedirection
+
+    #Import the session
+    Import-PSSession $Session -AllowClobber | Out-Null
+}
+
+###############################################################################
+#
+# Function ConnectTo-365Tenancy
+#
+# PURPOSE
+#    Connects to Microsoft Online Remote PowerShell using the tenant credentials
+#
+# INPUT
+#    Tenant Admin username and password.
+#
+# RETURN
+#    None.
 #
 # REQUIRED SOFTWARE
 #    Microsoft ONline Services Sign-in Assistant
 #    Windows Azure Active Directory Module for Windows Powershell
-############################################################################### 
-function ConnectTo-365Tenancy 
-{    
-    Param(  
-        [Parameter( 
-        Mandatory=$true, 
-        Position=0)] 
-        [String]$Office365AdminUsername, 
-        [Parameter( 
-        Mandatory=$true, 
-        Position=1)] 
-        [String]$Office365AdminPassword 
- 
-    ) 
-         
-    #Encrypt password for transmission to Office365 
-    $SecureOffice365Password = ConvertTo-SecureString -AsPlainText $Office365AdminPassword -Force     
-     
-    #Build credentials object 
-    $Office365Credentials  = New-Object System.Management.Automation.PSCredential $Office365AdminUsername, $SecureOffice365Password 
-     
-    #Create remote Powershell session 
-    Connect-MsolService -Credential $Office365Credentials | Out-Null 
-} 
+###############################################################################
+function ConnectTo-365Tenancy
+{
+    Param(
+        [Parameter(
+        Mandatory=$true,
+        Position=0)]
+        [String]$Office365AdminUsername,
+        [Parameter(
+        Mandatory=$true,
+        Position=1)]
+        [String]$Office365AdminPassword
+
+    )
+
+    #Encrypt password for transmission to Office365
+    $SecureOffice365Password = ConvertTo-SecureString -AsPlainText $Office365AdminPassword -Force
+
+    #Build credentials object
+    $Office365Credentials  = New-Object System.Management.Automation.PSCredential $Office365AdminUsername, $SecureOffice365Password
+
+
+    #Install MSOL Module
+    Install-Module -Name "MSOnline" -Scope "CurrentUser"
+
+    #Create remote Powershell session
+    Connect-MsolService -Credential $Office365Credentials | Out-Null
+}
 
 
 # call main
